@@ -1,7 +1,25 @@
+#pragma once
+
 #include "api.h"   
 #include "main.h"
+#include <vector>
 
+class Robot;
 
+class Two_way_Motor{
+    //Two_way_Motor
+    //creates a unified interface for the two way motor
+    public:
+    Two_way_Motor(Robot* robot, pros::Motor Motor, pros::controller_digital_e_t key1, pros::controller_digital_e_t key2);
+    
+    friend class Robot;
+
+    private:
+    Robot* robot;
+    pros::Motor Motor;
+    pros::controller_digital_e_t key1;
+    pros::controller_digital_e_t key2;
+};
 
 
 //to whom may use this header
@@ -20,6 +38,11 @@
 //you will need to develop your own function for the mechanical part
 //this header is just for the drivetrain, 
 
+
+
+
+
+
 enum Drive_Type {
     Tank,
     Arcade
@@ -30,6 +53,8 @@ enum class Error {
     Normal
 };
 
+
+
 class Robot {
     //Robot
     //creates a unified interface especially for the drivetrain
@@ -37,7 +62,12 @@ class Robot {
 
 public:
 
-    Robot(pros::MotorGroup &left_motor_group, pros::MotorGroup &right_motor_group, pros::Controller &controller, Drive_Type drive_type);
+    Robot(std::initializer_list<int8_t> left_motor_group,  std::initializer_list<int8_t> right_motor_group, pros::Controller &controller, Drive_Type drive_type): Left_Drivetrain(left_motor_group), Right_Drivetrain(right_motor_group), main_controller(&controller), bot_drive_type(drive_type) {
+        // Constructor implementation
+        main_controller = &controller;
+        bot_drive_type = drive_type;
+        pros::Task error_task([this] { this->Error_Handler_Task(); });
+    }
     //Here is how this works:
     //there is a pointer to the left and right motor group, and a pointer to the controller, and a drive type
     //your claim would be like this:
@@ -49,23 +79,23 @@ public:
     //}
     //for drive type explanation, see the update_Driver_ctrl function
 
-    void forward_distance(int distance);
+    inline void forward_distance(int distance);
     //forward_distance: move forward a certain distance, the unit is (not sure yet)
 
-    void backward_distance(int distance);
+    inline void backward_distance(int distance);
     //backward_distance: move backward a certain distance, the unit is (not sure yet)
 
-    void forward_time(int time, int speed);
+    inline void forward_time(int time, int speed);
     //forward_time: move forward for a certain time, the unit is (not sure yet), speed is from 0 to 127
 
-    void backward_time(int time, int speed);
+    inline void backward_time(int time, int speed);
     //backward_time: move backward for a certain time, the unit is (not sure yet), speed is from 0 to 127
 
-    void turnLeft(int angle);
+    inline void turnLeft(int angle);
 
-    void turnRight(int angle);
+    inline void turnRight(int angle);
 
-    void update_Driver_ctrl();
+    inline void update_Driver_ctrl();
     //update_Driver_ctrl: update the driver control, this function should be called in the main loop
     //for drive type explanation:
     //Tank: left stick controls left side, right stick controls right side
@@ -73,42 +103,52 @@ public:
 
     Error Bot_State = Error::Normal;
     int Error_Handler_Task();
+    friend class Two_way_Motor;
+    std::vector<Two_way_Motor> Two_way_Motor_list;
+
 private:
-    pros::MotorGroup* Left_Drivetrain = nullptr;
-    pros::MotorGroup* Right_Drivetrain = nullptr;
-    pros::Controller* main_controller = nullptr;
+    pros::MotorGroup Left_Drivetrain;
+    pros::MotorGroup Right_Drivetrain;
+    pros::Controller* main_controller;
     Drive_Type bot_drive_type;
+    
+    
+	// Correct: Captures 'this' so the task knows which Robot instance to use
+    
 };
 
-Robot::Robot(pros::MotorGroup& left_motor_group, pros::MotorGroup& right_motor_group, pros::Controller& controller, Drive_Type drive_type = Tank) {
-    Left_Drivetrain = &left_motor_group;
-    Right_Drivetrain = &right_motor_group;
-    main_controller = &controller;
-    bot_drive_type = drive_type;
-	// Correct: Captures 'this' so the task knows which Robot instance to use
-    pros::Task error_task([this] { this->Error_Handler_Task(); });
-}
-
-void Robot::update_Driver_ctrl(){
+inline void Robot::update_Driver_ctrl(){
     if (main_controller == nullptr) return;
     switch (bot_drive_type) {
         case Tank: {
             int left_move = main_controller->get_analog(ANALOG_LEFT_Y);  
             int right_move = main_controller->get_analog(ANALOG_RIGHT_Y);  
-            Left_Drivetrain->move(left_move); 
-            Right_Drivetrain->move(right_move);
+            Left_Drivetrain.move(left_move); 
+            Right_Drivetrain.move(right_move);
             break;
         }
         case Arcade: {
             int dir = main_controller->get_analog(ANALOG_LEFT_Y);    
             int turn = main_controller->get_analog(ANALOG_RIGHT_X);  
-            Left_Drivetrain->move(dir - turn);                      
-            Right_Drivetrain->move(dir + turn);                     
+            Left_Drivetrain.move(dir - turn);                      
+            Right_Drivetrain.move(dir + turn);                     
             break; 
         }
     }
+    for (auto& motor : Two_way_Motor_list) {
+        if (main_controller->get_digital(motor.key1)) {
+            motor.Motor.move(127);  
+        } else if (main_controller->get_digital(motor.key2)) {
+            motor.Motor.move(-127); 
+        } else {
+            motor.Motor.move(0);    
+        }
+    }
 }
-int Robot::Error_Handler_Task(){
+
+
+
+inline int Robot::Error_Handler_Task(){
     while (true) {
         switch (Bot_State) {
             case Error::Normal:
@@ -118,5 +158,11 @@ int Robot::Error_Handler_Task(){
         
         pros::delay(20);
     }
+
     return 0; 
+}
+
+inline Two_way_Motor::Two_way_Motor(Robot* robot, pros::Motor Motor, pros::controller_digital_e_t key1, pros::controller_digital_e_t key2) : robot(robot), Motor(Motor), key1(key1), key2(key2) {
+        // Constructor implementation
+        robot->Two_way_Motor_list.push_back(*this);
 }

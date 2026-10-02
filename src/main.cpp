@@ -26,9 +26,7 @@
 
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup Left_Drivetrain = LEFT_MOTOR_PORTS;
-pros::MotorGroup Right_Drivetrain = RIGHT_MOTOR_PORTS;
-Robot Geneva_Convention_Bot(Left_Drivetrain, Right_Drivetrain, master, Tank);
+Robot Geneva_Convention_Bot(LEFT_MOTOR_PORTS, RIGHT_MOTOR_PORTS, master, Tank);
 
 void initialize() {
 	pros::lcd::initialize();
@@ -79,7 +77,6 @@ void autonomous() {}
  * task, not resume it from where it left off.
  */
 void opcontrol() {
-	pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 	int main_loop_cycle_times = 0;
 	while (true) {
